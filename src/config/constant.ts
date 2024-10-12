@@ -30,7 +30,7 @@ export enum COMPONENT_IDS {
 export enum NAV_SHEAR_NATIVE_IDS {
   playDetail_pic = 'playDetail_pic',
   playDetail_header = 'playDetail_header',
-  playDetail_pageIndicator = 'playDetail_pageIndicator',
+  // playDetail_pageIndicator = 'playDetail_pageIndicator',
   playDetail_player = 'playDetail_player',
   songlistDetail_pic = 'songlistDetail_pic',
   songlistDetail_title = 'songlistDetail_title',
@@ -55,6 +55,8 @@ export const storageDataPrefix = {
   syncHost: '@sync_host',
   syncHostHistory: '@sync_host_history',
 
+  openStoragePath: '@open_storage_path',
+  selectedManagedFolder: '@selected_managed_folder',
   notificationTipEnable: '@notification_tip_enable',
   ignoringBatteryOptimizationTipEnable: '@ignoring_battery_optimization_tip_enable',
 
@@ -75,7 +77,6 @@ export const storageDataPrefix = {
   dislikeList: '@dislike_list',
 
   userApi: '@user_api__',
-  downloadList: '@download_list'
 } as const
 
 // v0.x.x 版本的 data keys
@@ -101,14 +102,14 @@ export const NAV_MENUS = [
   { id: 'nav_songlist', icon: 'album' },
   { id: 'nav_top', icon: 'leaderboard' },
   { id: 'nav_love', icon: 'love' },
-  { id: 'nav_download', icon: 'download-2' },
+  // { id: 'download', icon: 'download-2' },
   { id: 'nav_setting', icon: 'setting' },
 ] as const
 
 export type NAV_ID_Type = typeof NAV_MENUS[number]['id']
 
-export const LXM_FILE_EXT_RXP = /\.(json|lxmc)$/
-export const USER_API_SOURCE_FILE_EXT_RXP = /\.(js)$/
+export const LXM_FILE_EXT_RXP = ['json', 'lxmc', 'bin']
+export const USER_API_SOURCE_FILE_EXT_RXP = ['js']
 
 export const MUSIC_TOGGLE_MODE = {
   listLoop: 'listLoop', // 列表循环

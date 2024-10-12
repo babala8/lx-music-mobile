@@ -1,67 +1,56 @@
-import {useRef, useImperativeHandle, forwardRef, useState, useCallback, useEffect} from 'react'
+import { useRef, useImperativeHandle, forwardRef, useState } from 'react'
 import Text from '@/components/common/Text'
-import {View, TouchableOpacity, LayoutChangeEvent} from 'react-native'
-import {createStyle, openUrl, tipDialog, toast} from '@/utils/tools'
+import { View, TouchableOpacity } from 'react-native'
+import { createStyle, openUrl } from '@/utils/tools'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import Dialog, { type DialogType } from '@/components/common/Dialog'
 import Button from '@/components/common/Button'
 import List from './List'
-import ScriptImportExport, { type ScriptImportExportType } from './ScriptImportExport'
-import {state, useUserApiList} from '@/store/userApi'
-import Input, {InputType} from "@/components/common/Input";
+import ImportBtn from './ImportBtn'
 
-interface UrlInputType {
-  setText: (text: string) => void
-  getText: () => string
-  focus: () => void
-}
-const UrlInput = forwardRef<UrlInputType, {}>((props, ref) => {
-  const theme = useTheme()
-  const t = useI18n()
-  const [text, setText] = useState('')
-  const inputRef = useRef<InputType>(null)
-  const [height, setHeight] = useState(100)
+// interface UrlInputType {
+//   setText: (text: string) => void
+//   getText: () => string
+//   focus: () => void
+// }
+// const UrlInput = forwardRef<UrlInputType, {}>((props, ref) => {
+//   const theme = useTheme()
+//   const t = useI18n()
+//   const [text, setText] = useState('')
+//   const inputRef = useRef<InputType>(null)
+//   const [height, setHeight] = useState(100)
 
-  useImperativeHandle(ref, () => ({
-    getText() {
-      return text.trim()
-    },
-    setText(text) {
-      setText(text)
-    },
-    focus() {
-      inputRef.current?.focus()
-    }
-  }))
+//   useImperativeHandle(ref, () => ({
+//     getText() {
+//       return text.trim()
+//     },
+//     setText(text) {
+//       setText(text)
+//     },
+//     focus() {
+//       inputRef.current?.focus()
+//     },
+//   }))
 
-  return (
-    <View style={{height}}>
-      <Input
-        ref={inputRef}
-        value={text}
-        onChangeText={setText}
-        textAlignVertical="center"
-        placeholder={'请输入source url'}
-        size={12}
-        style={{backgroundColor: theme['c-primary-input-background'] }}
-        onLayout={e=>{
-          setHeight(e.nativeEvent.layout.height)
-        }}
-        multiline
-        returnKeyType={'done'}
-        blurOnSubmit={true}
-        // onSubmitEditing={ async ()=>{
-        //   if(text.trim().length && /^https?:\/\//.test(text.trim())){
-        //     toast('正在加载请稍后...')
-        //     const script = await downloadAndReadFile(text)
-        //     await importUserApi(script)
-        //   }
-        // }}
-      />
-    </View>
-  )
-})
+//   const handleLayout = useCallback(({ nativeEvent }: LayoutChangeEvent) => {
+//     setHeight(nativeEvent.layout.height)
+//   }, [])
+
+//   return (
+//     <View style={styles.inputContent} onLayout={handleLayout}>
+//       <Input
+//         ref={inputRef}
+//         value={text}
+//         onChangeText={setText}
+//         textAlignVertical="top"
+//         placeholder={t('setting_dislike_list_input_tip')}
+//         size={12}
+//         style={{ ...styles.input, height, backgroundColor: theme['c-primary-input-background'] }}
+//       />
+//     </View>
+//   )
+// })
 
 
 // export interface UserApiEditModalProps {
@@ -74,13 +63,11 @@ export interface UserApiEditModalType {
 
 export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
   const dialogRef = useRef<DialogType>(null)
-  const scriptImportExportRef = useRef<ScriptImportExportType>(null)
   // const sourceSelectorRef = useRef<SourceSelectorType>(null)
-  const inputRef = useRef<UrlInputType>(null)
+  // const inputRef = useRef<UrlInputType>(null)
   const [visible, setVisible] = useState(false)
   const theme = useTheme()
   const t = useI18n()
-  const userApiList = useUserApiList()
 
   const handleShow = () => {
     dialogRef.current?.setVisible(true)
@@ -101,22 +88,13 @@ export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
           handleShow()
         })
       }
-    }
+    },
   }))
 
   const handleCancel = () => {
     dialogRef.current?.setVisible(false)
   }
-  const handleImport = () => {
-    if (state.list.length > 20) {
-      void tipDialog({
-        message: t('user_api_max_tip'),
-        btnText: t('ok'),
-      })
-      return
-    }
-    scriptImportExportRef.current?.import()
-  }
+
   const openFAQPage = () => {
     void openUrl('https://lyswhut.github.io/lx-music-doc/mobile/custom-source')
   }
@@ -126,9 +104,7 @@ export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
       ? (
           <Dialog ref={dialogRef} bgHide={false}>
             <View style={styles.content}>
-              {
-                // userApiList.length ? null : <UrlInput ref={inputRef} />
-              }
+              {/* <UrlInput ref={inputRef} /> */}
               <Text size={16} style={styles.title}>{t('user_api_title')}</Text>
               <List />
               <View style={styles.tips}>
@@ -138,17 +114,16 @@ export default forwardRef<UserApiEditModalType, {}>((props, ref) => {
                 <TouchableOpacity onPress={openFAQPage}>
                   <Text style={{ ...styles.tipsText, textDecorationLine: 'underline' }} size={12} color={theme['c-primary-font']}>FAQ</Text>
                 </TouchableOpacity>
+                <View>
+                  <Text style={styles.tipsText} size={12}>{t('user_api_note')}</Text>
+                </View>
               </View>
-              <Text style={styles.tipsText} size={12}>{t('user_api_note')}</Text>
             </View>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleCancel}>
                 <Text size={14} color={theme['c-button-font']}>{t('close')}</Text>
               </Button>
-              <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleImport}>
-                <Text size={14} color={theme['c-button-font']}>{t('user_api_btn_import')}</Text>
-              </Button>
-              <ScriptImportExport ref={scriptImportExportRef} />
+              <ImportBtn btnStyle={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} />
             </View>
           </Dialog>
         ) : null
@@ -160,7 +135,7 @@ const styles = createStyle({
   content: {
     // flexGrow: 1,
     flexShrink: 1,
-    paddingHorizontal: 15,
+    paddingHorizontal: 8,
     paddingTop: 15,
     paddingBottom: 10,
     flexDirection: 'column',
@@ -171,6 +146,7 @@ const styles = createStyle({
     // backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   tips: {
+    paddingHorizontal: 7,
     marginTop: 15,
     flexDirection: 'row',
     flexWrap: 'wrap',

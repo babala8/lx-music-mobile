@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {DeviceEventEmitter, EmitterSubscription, InteractionManager, View} from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
+import { View } from 'react-native'
 import Search from '../Views/Search'
 import SongList from '../Views/SongList'
 import Mylist from '../Views/Mylist'
@@ -9,28 +9,29 @@ import commonState, { type InitState as CommonState } from '@/store/common/state
 import { createStyle } from '@/utils/tools'
 import PagerView, { type PageScrollStateChangedNativeEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
 import { setNavActiveId } from '@/core/common'
-import Download, {DownloadTypes} from "@/screens/Home/Views/Download";
-import BackgroundTimer from "react-native-background-timer";
+import settingState from '@/store/setting/state'
 
 const hideKeys = [
   'list.isShowAlbumName',
   'list.isShowInterval',
+  'theme.fontShadow',
 ] as Readonly<Array<keyof LX.AppSetting>>
 
 const SearchPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_search')
   const component = useMemo(() => <Search />, [])
   useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
     const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
       if (id == 'nav_search') {
         requestAnimationFrame(() => {
-          void InteractionManager.runAfterInteractions(() => {
-            setVisible(true)
-          })
+          setVisible(true)
         })
       }
     }
     const handleHide = () => {
+      if (currentId != 'nav_setting') return
       setVisible(false)
     }
     const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
@@ -55,26 +56,32 @@ const SongListPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_songlist')
   const component = useMemo(() => <SongList />, [])
   useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
     const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
       if (id == 'nav_songlist') {
         requestAnimationFrame(() => {
-          void InteractionManager.runAfterInteractions(() => {
-            setVisible(true)
-          })
+          setVisible(true)
         })
       }
     }
     const handleHide = () => {
+      if (currentId != 'nav_setting') return
       setVisible(false)
+    }
+    const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
+      if (keys.some(k => hideKeys.includes(k))) handleHide()
     }
     global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
     global.state_event.on('themeUpdated', handleHide)
     global.state_event.on('languageChanged', handleHide)
+    global.state_event.on('configUpdated', handleConfigUpdated)
 
     return () => {
       global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
       global.state_event.off('themeUpdated', handleHide)
       global.state_event.off('languageChanged', handleHide)
+      global.state_event.on('configUpdated', handleConfigUpdated)
     }
   }, [])
 
@@ -85,16 +92,17 @@ const LeaderboardPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_top')
   const component = useMemo(() => <Leaderboard />, [])
   useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
     const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
       if (id == 'nav_top') {
         requestAnimationFrame(() => {
-          void InteractionManager.runAfterInteractions(() => {
-            setVisible(true)
-          })
+          setVisible(true)
         })
       }
     }
     const handleHide = () => {
+      if (currentId != 'nav_setting') return
       setVisible(false)
     }
     const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
@@ -119,16 +127,17 @@ const MylistPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_love')
   const component = useMemo(() => <Mylist />, [])
   useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
     const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
       if (id == 'nav_love') {
         requestAnimationFrame(() => {
-          void InteractionManager.runAfterInteractions(() => {
-            setVisible(true)
-          })
+          setVisible(true)
         })
       }
     }
     const handleHide = () => {
+      if (currentId != 'nav_setting') return
       setVisible(false)
     }
     const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
@@ -156,9 +165,7 @@ const SettingPage = () => {
     const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
       if (id == 'nav_setting') {
         requestAnimationFrame(() => {
-          void InteractionManager.runAfterInteractions(() => {
-            setVisible(true)
-          })
+          setVisible(true)
         })
       }
     }
@@ -166,47 +173,6 @@ const SettingPage = () => {
 
     return () => {
       global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
-    }
-  }, [])
-  return visible ? component : null
-}
-
-const DownloadPage = () => {
-  const [visible, setVisible] = useState(commonState.navActiveId == 'nav_download')
-  const [path, setPath] = useState('')
-  const downloadRef = useRef<DownloadTypes>(null)
-  const component = useMemo(() => {
-    return <Download ref={downloadRef} />
-  },[])
-
-  useEffect(() => {
-    const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
-      if (id == 'nav_download') {
-        requestAnimationFrame(() => {
-          void InteractionManager.runAfterInteractions(() => {
-            setVisible(true)
-          })
-        })
-      }
-    }
-    const handleLaunchFilePathUpdated = (path:string)=>{
-      console.log('handleLaunchFilePathUpdated',path);
-      requestAnimationFrame(() => {
-        void InteractionManager.runAfterInteractions(() => {
-          downloadRef.current?.setFilePath(path)
-          requestAnimationFrame(()=>{
-            console.log('start 000');
-            global.state_event.navActiveIdUpdated('nav_download')
-          })
-        })
-      })
-    }
-    global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
-    global.cache_event.on('launchFilePathUpdated',handleLaunchFilePathUpdated)
-
-    return () => {
-      global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
-      global.cache_event.off('launchFilePathUpdated',handleLaunchFilePathUpdated)
     }
   }, [])
   return visible ? component : null
@@ -218,7 +184,6 @@ const viewMap = {
   nav_top: 2,
   nav_love: 3,
   nav_setting: 4,
-  'nav_download': 5
 }
 const indexMap = [
   'nav_search',
@@ -226,11 +191,10 @@ const indexMap = [
   'nav_top',
   'nav_love',
   'nav_setting',
-  'nav_download'
 ] as const
 
 const Main = () => {
-  const pagerViewRef = useRef<PagerView>(null)
+  const pagerViewRef = useRef<ComponentRef<typeof PagerView>>(null)
   let activeIndexRef = useRef(viewMap[commonState.navActiveId])
   // const isScrollingRef = useRef(false)
   // const scrollPositionRef = useRef(-1)
@@ -286,10 +250,16 @@ const Main = () => {
       activeIndexRef.current = index
       pagerViewRef.current?.setPageWithoutAnimation(index)
     }
+    const handleConfigUpdate = (keys: Array<keyof LX.AppSetting>, setting: Partial<LX.AppSetting>) => {
+      if (!keys.includes('common.homePageScroll')) return
+      pagerViewRef.current?.setScrollEnabled(setting['common.homePageScroll']!)
+    }
     // window.requestAnimationFrame(() => pagerViewRef.current && pagerViewRef.current.setPage(activeIndexRef.current))
     global.state_event.on('navActiveIdUpdated', handleUpdate)
+    global.state_event.on('configUpdated', handleConfigUpdate)
     return () => {
       global.state_event.off('navActiveIdUpdated', handleUpdate)
+      global.state_event.off('configUpdated', handleConfigUpdate)
     }
   }, [])
 
@@ -301,6 +271,7 @@ const Main = () => {
       offscreenPageLimit={1}
       onPageSelected={onPageSelected}
       onPageScrollStateChanged={onPageScrollStateChanged}
+      scrollEnabled={settingState.setting['common.homePageScroll']}
       style={styles.pagerView}
     >
       <View collapsable={false} key="nav_search" style={styles.pageStyle}>
@@ -318,9 +289,21 @@ const Main = () => {
       <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
         <SettingPage />
       </View>
-      <View collapsable={false} key="nav_download" style={styles.pageStyle}>
-        <DownloadPage/>
+      {/* <View collapsable={false} key="nav_search" style={styles.pageStyle}>
+        <Search />
       </View>
+      <View collapsable={false} key="nav_songlist" style={styles.pageStyle}>
+        <SongList />
+      </View>
+      <View collapsable={false} key="nav_top" style={styles.pageStyle}>
+        <Leaderboard />
+      </View>
+      <View collapsable={false} key="nav_love" style={styles.pageStyle}>
+        <Mylist />
+      </View>
+      <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
+        <Setting />
+      </View> */}
     </PagerView>
   ), [onPageScrollStateChanged, onPageSelected])
 

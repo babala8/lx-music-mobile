@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
-import { useWindowSize } from '@/utils/hooks'
+import { useHorizontalMode } from '@/utils/hooks'
 import PageContent from '@/components/PageContent'
 import { setComponentId } from '@/core/common'
 import { COMPONENT_IDS } from '@/config/constant'
 import Vertical from './Vertical'
 import Horizontal from './Horizontal'
-import {importUserApi} from "@/core/userApi";
+import { navigations } from '@/navigation'
+import settingState from '@/store/setting/state'
 
 
 interface Props {
@@ -14,24 +15,23 @@ interface Props {
 
 
 export default ({ componentId }: Props) => {
-  const windowSize = useWindowSize()
+  const isHorizontalMode = useHorizontalMode()
   useEffect(() => {
     setComponentId(COMPONENT_IDS.home, componentId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
 
-    fetch("https://lib-bj.oss-cn-beijing.aliyuncs.com/sixyin-music-source-v1.0.7.js",{
-      method:'GET'
-    }).then(res=>res.text()).then(async script=>{
-      return importUserApi(script)
-    })
+    if (settingState.setting['player.startupPushPlayDetailScreen']) {
+      navigations.pushPlayDetailScreen(componentId, true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
     <PageContent>
       {
-        windowSize.height > windowSize.width
-          ? <Vertical />
-          : <Horizontal />
+        isHorizontalMode
+          ? <Horizontal />
+          : <Vertical />
       }
     </PageContent>
   )

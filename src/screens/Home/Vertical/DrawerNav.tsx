@@ -1,7 +1,7 @@
 import { memo } from 'react'
-import { ScrollView, StatusBar, TouchableOpacity, View } from 'react-native'
+import { ScrollView, TouchableOpacity, View } from 'react-native'
 import { useI18n } from '@/lang'
-import { useNavActiveId } from '@/store/common/hook'
+import { useNavActiveId, useStatusbarHeight } from '@/store/common/hook'
 import { useTheme } from '@/store/theme/hook'
 import { Icon } from '@/components/common/Icon'
 import { confirmDialog, createStyle, exitApp as backHome } from '@/utils/tools'
@@ -59,8 +59,9 @@ const styles = createStyle({
 
 const Header = () => {
   const theme = useTheme()
+  const statusBarHeight = useStatusbarHeight()
   return (
-    <View style={{ paddingTop: StatusBar.currentHeight, backgroundColor: theme['c-primary-light-700-alpha-500'] }}>
+    <View style={{ paddingTop: statusBarHeight, backgroundColor: theme['c-primary-light-700-alpha-500'] }}>
       <View style={styles.header}>
         <Icon name="logo" color={theme['c-primary-dark-100-alpha-300']} size={28} />
         <Text style={styles.headerText} size={28} color={theme['c-primary-dark-100-alpha-300']}>LX Music</Text>
@@ -120,14 +121,14 @@ export default memo(() => {
     global.app_event.changeMenuVisible(false)
     setNavActiveId(id)
   }
-  const nav_menus =  NAV_MENUS
+
 
   return (
     <View style={{ ...styles.container, backgroundColor: theme['c-content-background'] }}>
       <Header />
       <ScrollView style={styles.menus}>
         <View style={styles.list}>
-          {nav_menus.map(menu => <MenuItem key={menu.id} id={menu.id} icon={menu.icon} onPress={handlePress} />)}
+          {NAV_MENUS.map(menu => <MenuItem key={menu.id} id={menu.id} icon={menu.icon} onPress={handlePress} />)}
         </View>
       </ScrollView>
 

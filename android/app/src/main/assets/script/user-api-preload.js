@@ -1,21 +1,42 @@
 'use strict'
 
-globalThis.lx_setup = (key, id, name, description, rawScript) => {
-  delete globalThis.setup
+globalThis.lx_setup = (key, id, name, description, version, author, homepage, rawScript) => {
+  delete globalThis.lx_setup
   const _nativeCall = globalThis.__lx_native_call__
   delete globalThis.__lx_native_call__
-  const set_timeout = globalThis.__lx_native_call__set_timeout
-  delete globalThis.__lx_native_call__set_timeout
-  const utils_str2b64 = globalThis.__lx_native_call__utils_str2b64
-  delete globalThis.__lx_native_call__utils_str2b64
-  const utils_b642buf = globalThis.__lx_native_call__utils_b642buf
-  delete globalThis.__lx_native_call__utils_b642buf
-  const utils_str2md5 = globalThis.__lx_native_call__utils_str2md5
-  delete globalThis.__lx_native_call__utils_str2md5
-  const utils_aes_encrypt = globalThis.__lx_native_call__utils_aes_encrypt
-  delete globalThis.__lx_native_call__utils_aes_encrypt
-  const utils_rsa_encrypt = globalThis.__lx_native_call__utils_rsa_encrypt
-  delete globalThis.__lx_native_call__utils_rsa_encrypt
+  const checkLength = (str, length = 1048576) => {
+    if (typeof str == 'string' && str.length > length) throw new Error('Input too long')
+    return str
+  }
+  const nativeFuncNames = [
+    '__lx_native_call__set_timeout',
+    '__lx_native_call__utils_str2b64',
+    '__lx_native_call__utils_b642buf',
+    '__lx_native_call__utils_str2md5',
+    '__lx_native_call__utils_aes_encrypt',
+    '__lx_native_call__utils_rsa_encrypt',
+  ]
+  const nativeFuncs = {}
+  for (const name of nativeFuncNames) {
+    const nativeFunc = globalThis[name]
+    delete globalThis[name]
+    nativeFuncs[name.replace('__lx_native_call__', '')] = (...args) => {
+      for (const arg of args) checkLength(arg)
+      return nativeFunc(...args)
+    }
+  }
+  // const set_timeout = globalThis.__lx_native_call__set_timeout
+  // delete globalThis.__lx_native_call__set_timeout
+  // const utils_str2b64 = globalThis.__lx_native_call__utils_str2b64
+  // delete globalThis.__lx_native_call__utils_str2b64
+  // const utils_b642buf = globalThis.__lx_native_call__utils_b642buf
+  // delete globalThis.__lx_native_call__utils_b642buf
+  // const utils_str2md5 = globalThis.__lx_native_call__utils_str2md5
+  // delete globalThis.__lx_native_call__utils_str2md5
+  // const utils_aes_encrypt = globalThis.__lx_native_call__utils_aes_encrypt
+  // delete globalThis.__lx_native_call__utils_aes_encrypt
+  // const utils_rsa_encrypt = globalThis.__lx_native_call__utils_rsa_encrypt
+  // delete globalThis.__lx_native_call__utils_rsa_encrypt
   const KEY_PREFIX = {
     publicKeyStart: '-----BEGIN PUBLIC KEY-----',
     publicKeyEnd: '-----END PUBLIC KEY-----',
@@ -33,20 +54,25 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
   const nativeCall = (action, data) => {
     data = JSON.stringify(data)
     // console.log('nativeCall', action, data)
+    checkLength(data, 2097152)
     _nativeCall(key, action, data)
   }
 
   const callbacks = new Map()
   let timeoutId = 0
   const _setTimeout = (callback, timeout = 0, ...params) => {
-    if (typeof timeout !== 'number' || timeout < 0) throw new Error('timeout required number')
+    if (typeof callback !== 'function') throw new Error('callback required a function')
+    if (typeof timeout !== 'number' || timeout < 0) throw new Error('timeout required a number')
     if (timeoutId > 90000000000) throw new Error('max timeout')
     const id = timeoutId++
     callbacks.set(id, {
-      callback,
+      callback(...args) {
+        // eslint-disable-next-line n/no-callback-literal
+        callback(...args)
+      },
       params,
     })
-    set_timeout(id, parseInt(timeout))
+    nativeFuncs.set_timeout(id, parseInt(timeout))
     return id
   }
   const _clearTimeout = (id) => {
@@ -123,13 +149,14 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
   const events = {
     request: null,
   }
-  const allSources = ['kw', 'kg', 'tx', 'wy', 'mg']
+  const allSources = ['kw', 'kg', 'tx', 'wy', 'mg', 'local']
   const supportQualitys = {
     kw: ['128k', '320k', 'flac', 'flac24bit'],
     kg: ['128k', '320k', 'flac', 'flac24bit'],
     tx: ['128k', '320k', 'flac', 'flac24bit'],
     wy: ['128k', '320k', 'flac', 'flac24bit'],
     mg: ['128k', '320k', 'flac', 'flac24bit'],
+    local: [],
   }
   const supportActions = {
     kw: ['musicUrl'],
@@ -138,7 +165,20 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
     wy: ['musicUrl'],
     mg: ['musicUrl'],
     xm: ['musicUrl'],
+    local: ['musicUrl', 'lyric', 'pic'],
   }
+
+  const verifyLyricInfo = (info) => {
+    if (typeof info != 'object' || typeof info.lyric != 'string') throw new Error('failed')
+    if (info.lyric.length > 51200) throw new Error('failed')
+    return {
+      lyric: info.lyric,
+      tlyric: (typeof info.tlyric == 'string' && info.tlyric.length < 5120) ? info.tlyric : null,
+      rlyric: (typeof info.rlyric == 'string' && info.rlyric.length < 5120) ? info.rlyric : null,
+      lxlyric: (typeof info.lxlyric == 'string' && info.lxlyric.length < 8192) ? info.lxlyric : null,
+    }
+  }
+
   const requestQueue = new Map()
   let isInitedApi = false
   let isShowedUpdateAlert = false
@@ -182,6 +222,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
         let result
         switch (data.action) {
           case 'musicUrl':
+            if (typeof response != 'string' || response.length > 2048 || !/^https?:/.test(response)) throw new Error('failed')
             result = {
               source: data.source,
               action: data.action,
@@ -189,6 +230,21 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
                 type: data.info.type,
                 url: response,
               },
+            }
+            break
+          case 'lyric':
+            result = {
+              source: data.source,
+              action: data.action,
+              data: verifyLyricInfo(response),
+            }
+            break
+          case 'pic':
+            if (typeof response != 'string' || response.length > 2048 || !/^https?:/.test(response)) throw new Error('failed')
+            result = {
+              source: data.source,
+              action: data.action,
+              data: response,
             }
             break
         }
@@ -206,23 +262,18 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
   const jsCall = (action, data) => {
     // console.log('jsCall', action, data)
     switch (action) {
+      case '__run_error__':
+        if (!isInitedApi) isInitedApi = true
+        return
       case '__set_timeout__':
         handleSetTimeout(data)
-        break
+        return
       case 'request':
         handleRequest(data)
-        break
+        return
       case 'response':
         handleNativeResponse(data)
-        break
-      case NATIVE_EVENTS_NAMES['utils.buffer.from']:
-        break
-      case NATIVE_EVENTS_NAMES['utils.buffer.bufToString']:
-
-        break
-
-      default:
-        break
+        return
     }
     return 'Unknown action: ' + action
   }
@@ -233,7 +284,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
     writable: false,
     value: (_key, action, data) => {
       if (key != _key) return 'Invalid key'
-      return jsCall(action, JSON.parse(data))
+      return data == null ? jsCall(action) : jsCall(action, JSON.parse(data))
     },
   })
 
@@ -241,9 +292,6 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
   /**
    *
    * @param {*} info {
-   *                    openDevTools: false,
-   *                    status: true,
-   *                    message: 'xxx',
    *                    sources: {
    *                         kw: ['128k', '320k', 'flac', 'flac24bit'],
    *                         kg: ['128k', '320k', 'flac', 'flac24bit'],
@@ -255,15 +303,15 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
    */
   const handleInit = (info) => {
     if (!info) {
-      nativeCall(NATIVE_EVENTS_NAMES.init, { id, info: null, status: false, errorMessage: 'Init failed' })
+      nativeCall(NATIVE_EVENTS_NAMES.init, { info: null, status: false, errorMessage: 'Missing required parameter init info' })
       // sendMessage(NATIVE_EVENTS_NAMES.init, false, null, typeof info.message === 'string' ? info.message.substring(0, 100) : '')
       return
     }
-    if (!info.status) {
-      nativeCall(NATIVE_EVENTS_NAMES.init, { id, info: null, status: false, errorMessage: 'Init failed' })
-      // sendMessage(NATIVE_EVENTS_NAMES.init, false, null, typeof info.message === 'string' ? info.message.substring(0, 100) : '')
-      return
-    }
+    // if (!info.status) {
+    //   nativeCall(NATIVE_EVENTS_NAMES.init, { info: null, status: false, errorMessage: 'Init failed' })
+    //   // sendMessage(NATIVE_EVENTS_NAMES.init, false, null, typeof info.message === 'string' ? info.message.substring(0, 100) : '')
+    //   return
+    // }
     const sourceInfo = {
       sources: {},
     }
@@ -281,10 +329,10 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
       }
     } catch (error) {
       // console.log(error)
-      nativeCall(NATIVE_EVENTS_NAMES.init, { id, info: null, status: false, errorMessage: error.message })
+      nativeCall(NATIVE_EVENTS_NAMES.init, { info: null, status: false, errorMessage: error.message })
       return
     }
-    nativeCall(NATIVE_EVENTS_NAMES.init, { id, info: sourceInfo, status: true })
+    nativeCall(NATIVE_EVENTS_NAMES.init, { info: sourceInfo, status: true })
   }
   const handleShowUpdateAlert = (data, resolve, reject) => {
     if (!data || typeof data != 'object') return reject(new Error('parameter format error.'))
@@ -296,7 +344,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
   }
 
   const dataToB64 = (data) => {
-    if (typeof data === 'string') return utils_str2b64(data)
+    if (typeof data === 'string') return nativeFuncs.utils_str2b64(data)
     else if (Array.isArray(data) || ArrayBuffer.isView(data)) return utils.buffer.bufToString(data, 'base64')
     throw new Error('data type error: ' + typeof data + ' raw data: ' + data)
   }
@@ -306,9 +354,9 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
         // console.log('aesEncrypt', buffer, mode, key, iv)
         switch (mode) {
           case 'aes-128-cbc':
-            return utils.buffer.from(utils_aes_encrypt(dataToB64(buffer), dataToB64(key), dataToB64(iv), AES_MODE.CBC_128_PKCS7Padding), 'base64')
+            return utils.buffer.from(nativeFuncs.utils_aes_encrypt(dataToB64(buffer), dataToB64(key), dataToB64(iv), AES_MODE.CBC_128_PKCS7Padding), 'base64')
           case 'aes-128-ecb':
-            return utils.buffer.from(utils_aes_encrypt(dataToB64(buffer), dataToB64(key), '', AES_MODE.ECB_128_NoPadding), 'base64')
+            return utils.buffer.from(nativeFuncs.utils_aes_encrypt(dataToB64(buffer), dataToB64(key), '', AES_MODE.ECB_128_NoPadding), 'base64')
           default:
             throw new Error('Binary encoding is not supported for input strings')
         }
@@ -318,7 +366,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
         if (typeof key !== 'string') throw new Error('Invalid RSA key')
         key = key.replace(KEY_PREFIX.publicKeyStart, '')
           .replace(KEY_PREFIX.publicKeyEnd, '')
-        return utils.buffer.from(utils_rsa_encrypt(dataToB64(buffer), key, RSA_PADDING.NoPadding), 'base64')
+        return utils.buffer.from(nativeFuncs.utils_rsa_encrypt(dataToB64(buffer), key, RSA_PADDING.NoPadding), 'base64')
       },
       randomBytes(size) {
         const byteArray = new Uint8Array(size)
@@ -329,7 +377,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
       },
       md5(str) {
         if (typeof str !== 'string') throw new Error('param required a string')
-        const md5 = utils_str2md5(str)
+        const md5 = nativeFuncs.utils_str2md5(str)
         // console.log('md5', str, md5)
         return md5
       },
@@ -342,7 +390,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
             case 'binary':
               throw new Error('Binary encoding is not supported for input strings')
             case 'base64':
-              return new Uint8Array(JSON.parse(utils_b642buf(input)))
+              return new Uint8Array(JSON.parse(nativeFuncs.utils_b642buf(input)))
             case 'hex':
               return new Uint8Array(input.match(/.{1,2}/g).map(byte => parseInt(byte, 16)))
             default:
@@ -364,7 +412,7 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
             case 'hex':
               return new Uint8Array(buf).reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '')
             case 'base64':
-              return utils_str2b64(bytesToString(Array.from(buf)))
+              return nativeFuncs.utils_str2b64(bytesToString(Array.from(buf)))
             case 'utf8':
             case 'utf-8':
             default:
@@ -411,17 +459,21 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
       //   // data.content_type = 'multipart/form-data'
       //   options.json = false
       // }
-      if (timeout && typeof timeout == 'number') options.timeout = Math.min(options.timeout, 60_000)
+      if (timeout && typeof timeout == 'number' && timeout > 0) options.timeout = Math.min(timeout, 60_000)
 
       let request = sendNativeRequest(url, { method, body, form, formData, ...options }, (err, resp) => {
-        callback(err, {
-          statusCode: resp.statusCode,
-          statusMessage: resp.statusMessage,
-          headers: resp.headers,
-          // bytes: resp.bytes,
-          // raw: resp.raw,
-          body: resp.body,
-        }, resp.body)
+        if (err) {
+          callback(err, null, null)
+        } else {
+          callback(err, {
+            statusCode: resp.statusCode,
+            statusMessage: resp.statusMessage,
+            headers: resp.headers,
+            // bytes: resp.bytes,
+            // raw: resp.raw,
+            body: resp.body,
+          }, resp.body)
+        }
       })
 
       return () => {
@@ -463,26 +515,17 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
     currentScriptInfo: {
       name,
       description,
+      version,
+      author,
+      homepage,
+      rawScript,
     },
-    version: '1.0.0',
+    version: '2.0.0',
     env: 'mobile',
   }
 
   globalThis.setTimeout = _setTimeout
   globalThis.clearTimeout = _clearTimeout
-  globalThis.window = globalThis
-  globalThis.document = {
-    getElementsByTagName(name) {
-      if (name == 'script') {
-        return [
-          Object.freeze({
-            innerText: rawScript,
-          }),
-        ]
-      }
-      return null
-    },
-  }
 
   const freezeObject = (obj) => {
     if (typeof obj != 'object') return
@@ -497,6 +540,13 @@ globalThis.lx_setup = (key, id, name, description, rawScript) => {
     return Object.getOwnPropertyDescriptors(this).name.configurable
       ? _toString.apply(this)
       : `function ${this.name}() { [native code] }`
+  }
+  // eslint-disable-next-line no-eval
+  globalThis.eval = function() {
+    throw new Error('eval is not available')
+  }
+  globalThis.Function = function() {
+    throw new Error('Function is not available')
   }
 
   const excludes = [

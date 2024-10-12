@@ -1,4 +1,4 @@
-import { type InitParams, onScriptAction, sendAction, type ResponseParams, type UpdateInfoParams } from '@/utils/nativeModules/userApi'
+import { type InitParams, onScriptAction, sendAction, type ResponseParams, type UpdateInfoParams, type RequestParams } from '@/utils/nativeModules/userApi'
 import { log, setUserApiList, setUserApiStatus } from '@/core/userApi'
 import settingState from '@/store/setting/state'
 import BackgroundTimer from 'react-native-background-timer'
@@ -8,87 +8,186 @@ import { confirmDialog, openUrl, tipDialog } from '@/utils/tools'
 
 
 export default async(setting: LX.AppSetting) => {
-  const requestQueue = new Map<string, { resolve: (value: ResponseParams['result']) => void, reject: (error: Error) => void, timeout: number }>()
+  const userApiRequestMap = new Map<string, { resolve: (value: ResponseParams['result']) => void, reject: (error: Error) => void, timeout: number }>()
+  const scriptRequestMap = new Map<string, { request: Promise<any>, abort: () => void }>()
 
   const cancelRequest = (requestKey: string, message: string) => {
-    const target = requestQueue.get(requestKey)
+    const target = scriptRequestMap.get(requestKey)
     if (!target) return
-    requestQueue.delete(requestKey)
-    BackgroundTimer.clearTimeout(target.timeout)
-    target.reject(new Error(message))
+    scriptRequestMap.delete(requestKey)
+    target.abort()
   }
-  const sendUserApiRequest = async(data: LX.UserApi.UserApiRequestParams) => new Promise<ResponseParams['result']>((resolve, reject) => {
-    requestQueue.set(data.requestKey, {
-      resolve,
-      reject,
-      timeout: BackgroundTimer.setTimeout(() => {
-        const target = requestQueue.get(data.requestKey)
-        if (!target) return
-        requestQueue.delete(data.requestKey)
-        target.reject(new Error('request timeout'))
-      }, 30_000),
+  const sendScriptRequest = (requestKey: string, url: string, options: RequestParams['options']) => {
+    let req = fetchData(url, options)
+    req.request.then(response => {
+      // console.log(response)
+      sendAction('response', {
+        error: null,
+        requestKey,
+        response,
+      })
+    }).catch(err => {
+      sendAction('response', {
+        error: err.message,
+        requestKey,
+        response: null,
+      })
+    }).finally(() => {
+      scriptRequestMap.delete(requestKey)
     })
-    sendAction('request', data)
-  })
+    scriptRequestMap.set(requestKey, req)
+  }
+  const sendUserApiRequest = async(data: LX.UserApi.UserApiRequestParams) => {
+    const handleApiUpdate = () => {
+      const target = userApiRequestMap.get(data.requestKey)
+      if (!target) return
+      userApiRequestMap.delete(data.requestKey)
+      BackgroundTimer.clearTimeout(target.timeout)
+      target.reject(new Error('request failed'))
+    }
+    const requestPromise = new Promise<ResponseParams['result']>((resolve, reject) => {
+      userApiRequestMap.set(data.requestKey, {
+        resolve,
+        reject,
+        timeout: BackgroundTimer.setTimeout(() => {
+          const target = userApiRequestMap.get(data.requestKey)
+          if (!target) return
+          userApiRequestMap.delete(data.requestKey)
+          target.reject(new Error('request timeout'))
+        }, 20_000),
+      })
+      sendAction('request', data)
+    }).finally(() => {
+      global.state_event.off('apiSourceUpdated', handleApiUpdate)
+    })
+    global.state_event.on('apiSourceUpdated', handleApiUpdate)
+    return requestPromise
+  }
   const handleUserApiResponse = ({ status, result, requestKey, errorMessage }: ResponseParams) => {
-    const target = requestQueue.get(requestKey)
+    const target = userApiRequestMap.get(requestKey)
     if (!target) return
-    requestQueue.delete(requestKey)
+    userApiRequestMap.delete(requestKey)
     BackgroundTimer.clearTimeout(target.timeout)
     if (status) target.resolve(result)
     else target.reject(new Error(errorMessage ?? 'failed'))
   }
-  const handleStateChange = ({ status, errorMessage, info, id }: InitParams) => {
+  const handleStateChange = ({ status, errorMessage, info }: InitParams) => {
     // console.log(status, message, info)
     setUserApiStatus(status, errorMessage)
-    if (!status || !info?.sources || id !== settingState.setting['common.apiSource']) return
-
-    let apis: any = {}
-    let qualitys: LX.QualityList = {}
-    for (const [source, { actions, type, qualitys: sourceQualitys }] of Object.entries(info.sources)) {
-      if (type != 'music') continue
-      apis[source as LX.Source] = {}
-      for (const action of actions) {
-        switch (action) {
-          case 'musicUrl':
-            apis[source].getMusicUrl = (songInfo: LX.Music.MusicInfo, type: LX.Quality) => {
-              const requestKey = `request__${Math.random().toString().substring(2)}`
-              return {
-                canceleFn() {
-                  // userApiRequestCancel(requestKey)
-                },
-                promise: sendUserApiRequest({
-                  requestKey,
-                  data: {
-                    source,
-                    action: 'musicUrl',
-                    info: {
-                      type,
-                      musicInfo: songInfo,
+    if (!info || info.id !== settingState.setting['common.apiSource']) return
+    if (status) {
+      if (info.sources) {
+        let apis: any = {}
+        let qualitys: LX.QualityList = {}
+        for (const [source, { actions, type, qualitys: sourceQualitys }] of Object.entries(info.sources)) {
+          if (type != 'music') continue
+          apis[source as LX.Source] = {}
+          for (const action of actions) {
+            switch (action) {
+              case 'musicUrl':
+                apis[source].getMusicUrl = (songInfo: LX.Music.MusicInfo, type: LX.Quality) => {
+                  const requestKey = `request__${Math.random().toString().substring(2)}`
+                  return {
+                    canceleFn() {
+                      // userApiRequestCancel(requestKey)
                     },
-                  },
-                  // eslint-disable-next-line @typescript-eslint/promise-function-async
-                }).then(res => {
-                  // console.log(res)
-                  if (!/^https?:/.test(res.data.url)) return Promise.reject(new Error('Get url failed'))
-                  return { type, url: res.data.url }
-                }).catch(async err => {
-                  console.log(err.message)
-                  return Promise.reject(err)
-                }),
-              }
+                    promise: sendUserApiRequest({
+                      requestKey,
+                      data: {
+                        source,
+                        action: 'musicUrl',
+                        info: {
+                          type,
+                          musicInfo: songInfo,
+                        },
+                      },
+                      // eslint-disable-next-line @typescript-eslint/promise-function-async
+                    }).then(res => {
+                      // console.log(res)
+                      return { type, url: res.data.url }
+                    }).catch(err => {
+                      console.log(err.message)
+                      throw err
+                    }),
+                  }
+                }
+                break
+              case 'lyric':
+                apis[source].getLyric = (songInfo: LX.Music.MusicInfo) => {
+                  const requestKey = `request__${Math.random().toString().substring(2)}`
+                  return {
+                    canceleFn() {
+                      // userApiRequestCancel(requestKey)
+                    },
+                    promise: sendUserApiRequest({
+                      requestKey,
+                      data: {
+                        source,
+                        action: 'lyric',
+                        info: {
+                          type,
+                          musicInfo: songInfo,
+                        },
+                      },
+                      // eslint-disable-next-line @typescript-eslint/promise-function-async
+                    }).then(res => {
+                      // console.log(res)
+                      return res.data
+                    }).catch(async err => {
+                      console.log(err.message)
+                      return Promise.reject(err)
+                    }),
+                  }
+                }
+                break
+              case 'pic':
+                apis[source].getPic = (songInfo: LX.Music.MusicInfo) => {
+                  const requestKey = `request__${Math.random().toString().substring(2)}`
+                  return {
+                    canceleFn() {
+                      // userApiRequestCancel(requestKey)
+                    },
+                    promise: sendUserApiRequest({
+                      requestKey,
+                      data: {
+                        source,
+                        action: 'pic',
+                        info: {
+                          type,
+                          musicInfo: songInfo,
+                        },
+                      },
+                      // eslint-disable-next-line @typescript-eslint/promise-function-async
+                    }).then(res => {
+                      // console.log(res)
+                      return res.data
+                    }).catch(async err => {
+                      console.log(err.message)
+                      return Promise.reject(err)
+                    }),
+                  }
+                }
+                break
+              default:
+                break
             }
-            break
-
-          default:
-            break
+          }
+          qualitys[source as LX.Source] = sourceQualitys
         }
+        global.lx.qualityList = qualitys
+        global.lx.apis = apis
+        global.state_event.apiSourceUpdated(settingState.setting['common.apiSource'])
       }
-      qualitys[source as LX.Source] = sourceQualitys
+    } else {
+      if (errorMessage) {
+        void tipDialog({
+          message: `${global.i18n.t('user_api__init_failed_alert', { name: info.name })}\n${errorMessage}`,
+          // selection: true,
+          btnText: global.i18n.t('ok'),
+        })
+      }
     }
-    global.lx.qualityList = qualitys
-    global.lx.apis = apis
-    global.state_event.apiSourceUpdated(settingState.setting['common.apiSource'])
+    if (!global.lx.apiInitPromise[1]) global.lx.apiInitPromise[2](status)
   }
   const showUpdateAlert = ({ name, log, updateUrl }: UpdateInfoParams) => {
     if (updateUrl) {
@@ -117,26 +216,14 @@ export default async(setting: LX.AppSetting) => {
     // console.log('script actuon: ', event)
     switch (event.action) {
       case 'init':
+        if ((event as unknown as { errorMessage?: string }).errorMessage) event.data.errorMessage = (event as unknown as { errorMessage: string }).errorMessage
         handleStateChange(event.data)
         break
       case 'response':
         handleUserApiResponse(event.data)
         break
       case 'request':
-        fetchData(event.data.url, event.data.options).request.then(response => {
-          // console.log(response)
-          sendAction('response', {
-            error: null,
-            requestKey: event.data.requestKey,
-            response,
-          })
-        }).catch(err => {
-          sendAction('response', {
-            error: err.message,
-            requestKey: event.data.requestKey,
-            response: null,
-          })
-        })
+        sendScriptRequest(event.data.requestKey, event.data.url, event.data.options)
         break
       case 'cancelRequest':
         cancelRequest(event.data, 'request canceled')

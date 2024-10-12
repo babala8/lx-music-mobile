@@ -25,32 +25,31 @@ const handleExitApp = async(reason: string) => {
 
 
 const registerPlaybackService = async() => {
-  console.log('isInitialized',isInitialized)
   if (isInitialized) return
 
   console.log('reg services...')
   TrackPlayer.addEventListener(TPEvent.RemotePlay, () => {
-    console.log('remote-play')
+    // console.log('remote-play')
     play()
   })
 
   TrackPlayer.addEventListener(TPEvent.RemotePause, () => {
-    console.log('remote-pause')
+    // console.log('remote-pause')
     void pause()
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteNext, () => {
-    console.log('remote-next')
+    // console.log('remote-next')
     void playNext()
   })
 
   TrackPlayer.addEventListener(TPEvent.RemotePrevious, () => {
-    console.log('remote-previous')
+    // console.log('remote-previous')
     void playPrev()
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteStop, () => {
-    console.log('remote-stop')
+    // console.log('remote-stop')
     void handleExitApp('Remote Stop')
   })
 
@@ -74,7 +73,7 @@ const registerPlaybackService = async() => {
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteSeek, async({ position }) => {
-    global.app_event.setProgress(position)
+    global.app_event.setProgress(position as number)
   })
 
   TrackPlayer.addEventListener(TPEvent.PlaybackState, async info => {

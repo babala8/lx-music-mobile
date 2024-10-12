@@ -1,6 +1,7 @@
 package cn.toside.music.mobile;
 
 import com.facebook.react.PackageList;
+import com.facebook.react.flipper.ReactNativeFlipper;
 import com.reactnativenavigation.NavigationApplication;
 import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactPackage;
@@ -10,10 +11,8 @@ import java.util.List;
 
 import cn.toside.music.mobile.cache.CachePackage;
 import cn.toside.music.mobile.crypto.CryptoPackage;
-import cn.toside.music.mobile.gzip.GzipPackage;
 import cn.toside.music.mobile.lyric.LyricPackage;
 import cn.toside.music.mobile.userApi.UserApiPackage;
-import cn.toside.music.mobile.mediameta.MediaMetaPackage;
 import cn.toside.music.mobile.utils.UtilsPackage;
 
 public class MainApplication extends NavigationApplication {
@@ -32,12 +31,10 @@ public class MainApplication extends NavigationApplication {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // packages.add(new MyReactNativePackage());
           packages.add(new CachePackage());
-          packages.add(new GzipPackage());
           packages.add(new LyricPackage());
           packages.add(new UtilsPackage());
           packages.add(new CryptoPackage());
           packages.add(new UserApiPackage());
-          packages.add(new MediaMetaPackage());
           return packages;
         }
 

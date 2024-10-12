@@ -16,19 +16,17 @@ export const setUserApiList = (list: LX.UserApi.UserApiInfo[]) => {
 }
 
 export const addUserApi = (info: LX.UserApi.UserApiInfo) => {
-  const isRepeat = !!(state.list.find(item=> item.name === info.name))
-  if(!isRepeat){
-    state.list.push(info)
+  state.list.push(info)
 
-    event.list_changed([...state.list])
-  }
+  event.list_changed([...state.list])
 }
 
 
 export const setUserApiAllowShowUpdateAlert = (id: string, enable: boolean) => {
   const targetIndex = state.list.findIndex(api => api.id == id)
   if (targetIndex < 0) return
-  state.list.splice(targetIndex, 1, { ...state.list[targetIndex], allowShowUpdateAlert: enable })
+  state.list[targetIndex].allowShowUpdateAlert = enable
+  state.list.splice(targetIndex, 1, { ...state.list[targetIndex] })
 
   event.list_changed([...state.list])
 }

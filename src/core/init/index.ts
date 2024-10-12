@@ -6,7 +6,8 @@ import initUserApi from './userApi'
 import initPlayer from './player'
 import dataInit from './dataInit'
 import initSync from './sync'
-// import syncSetting from './syncSetting'
+import initCommonState from './common'
+import { initDeeplink } from './deeplink'
 import { setApiSource } from '@/core/apiSource'
 import commonActions from '@/store/common/action'
 import settingState from '@/store/setting/state'
@@ -21,6 +22,7 @@ const handlePushedHomeScreen = async() => {
     if (isFirstPush) {
       isFirstPush = false
       void checkUpdate()
+      void initDeeplink()
     }
   } else {
     if (isFirstPush) isFirstPush = false
@@ -55,6 +57,8 @@ export default async() => {
   bootLog('Player inited.')
   await dataInit(setting)
   bootLog('Data inited.')
+  await initCommonState(setting)
+  bootLog('Common State inited.')
 
   void initSync(setting)
   bootLog('Sync inited.')

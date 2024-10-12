@@ -26,6 +26,7 @@ public class QuickJS {
   private boolean isInited = false;
   private QuickJSContext jsContext = null;
   final Handler timeoutHandler = new Handler();
+  private boolean inited = false;
 
   public QuickJS(ReactApplicationContext context, Handler eventHandler) {
     this.reactContext = context;
@@ -123,24 +124,27 @@ public class QuickJS {
     });
   }
 
-  private boolean createJSEnv(String id, String name, String desc, String rawScript) {
+  private boolean createJSEnv(String id, String name, String desc, String version, String author, String homepage, String rawScript) {
     init();
     QuickJSContext quickJSContext = this.jsContext;
     if (quickJSContext != null) quickJSContext.destroy();
-    QuickJSContext create = QuickJSContext.create();
-    this.jsContext = create;
-    create.setConsole(new Console(this.eventHandler));
+    this.jsContext = QuickJSContext.create();
+    this.jsContext.setConsole(new Console(this.eventHandler));
     String preloadScript = getPreloadScript();
     if (preloadScript == null) return false;
     createEnvObj(this.jsContext);
     this.jsContext.evaluate(preloadScript);
-    this.jsContext.getGlobalObject().getJSFunction("lx_setup").call(this.key, id, name, desc, rawScript);
+    this.jsContext.getGlobalObject().getJSFunction("lx_setup").call(this.key, id, name, desc, version, author, homepage, rawScript);
     return true;
   }
 
   private void callNative(String action, String data) {
     Message message = this.eventHandler.obtainMessage();
     message.what = HandlerWhat.ACTION;
+    if ("init".equals(action)) {
+      if (inited) return;
+      inited = true;
+    }
     message.obj = new Object[]{action, data};
     Log.d("UserApi [script call]", "script call action: " + action + " data: " + data);
     this.eventHandler.sendMessage(message);
@@ -151,37 +155,54 @@ public class QuickJS {
     String script = scriptInfo.getString("script", "");
     if (createJSEnv(scriptInfo.getString("id", ""),
       scriptInfo.getString("name", "Unknown"),
-      scriptInfo.getString("description", ""), script)) {
+      scriptInfo.getString("description", ""),
+      scriptInfo.getString("version", ""),
+      scriptInfo.getString("author", ""),
+      scriptInfo.getString("homepage", ""),
+      script)) {
       try {
         this.jsContext.evaluate(script);
         return "";
       } catch (Exception e) {
         Log.e("UserApi", "load script error: " + e.getMessage());
+        try {
+          callJS("__run_error__");
+        } catch (Exception ignored) {}
+        if (inited) return "";
+        inited = true;
         return e.getMessage();
       }
     }
     return "create JavaScript Env failed";
   }
 
+  public Object callJS(String action) {
+    Object[] params = new Object[]{this.key, action};
+    return callJS(params);
+  }
   public Object callJS(String action, Object... args) {
-    Object[] params;
-    if (args == null) {
-      params = new Object[]{this.key, action};
-    } else {
-      Object[] params2 = new Object[args.length + 2];
-      params2[0] = this.key;
-      params2[1] = action;
-      System.arraycopy(args, 0, params2, 2, args.length);
-      params = params2;
-    }
+    Object[] params = new Object[args.length + 2];
+    params[0] = this.key;
+    params[1] = action;
+    System.arraycopy(args, 0, params, 2, args.length);
+    return callJS(params);
+  }
+  public Object callJS(Object[] params) {
     try {
       return this.jsContext.getGlobalObject().getJSFunction("__lx_native__").call(params);
     } catch (Exception e) {
       Message message = eventHandler.obtainMessage();
       message.what = HandlerWhat.LOG;
-      message.obj = new Object[]{"error", "Call script error: " + e.getMessage()};
+      String msg = e.getMessage();
+      if (msg == null) return null;
+      if (msg.length() > 1024) msg = msg.substring(0, 1024) + "...";
+      message.obj = new Object[]{"error", "Call script error: " + msg};
       eventHandler.sendMessage(message);
       Log.e("UserApi", "Call script error: " + e.getMessage());
+      if (!this.inited) {
+        eventHandler.sendMessage(eventHandler.obtainMessage(HandlerWhat.INIT_FAILED, msg));
+        this.inited = true;
+      }
       return null;
     }
   }

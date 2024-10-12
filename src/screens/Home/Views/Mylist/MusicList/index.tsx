@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react'
 
 import listState from '@/store/list/state'
 import ListMenu, { type ListMenuType, type Position, type SelectInfo } from './ListMenu'
-import { handleDislikeMusic, handlePlay, handlePlayLater, handleRemove, handleShare, handleUpdateMusicPosition } from './listAction'
+import { handleDislikeMusic, handlePlay, handlePlayLater, handleRemove, handleShare, handleShowMusicSourceDetail, handleUpdateMusicInfo, handleUpdateMusicPosition } from './listAction'
 import List, { type ListType } from './List'
 import ListMusicAdd, { type MusicAddModalType as ListMusicAddType } from '@/components/MusicAddModal'
 import ListMusicMultiAdd, { type MusicMultiAddModalType as ListAddMultiType } from '@/components/MusicMultiAddModal'
@@ -13,7 +13,8 @@ import MultipleModeBar, { type SelectMode, type MultipleModeBarType } from './Mu
 import ListSearchBar, { type ListSearchBarType } from './ListSearchBar'
 import ListMusicSearch, { type ListMusicSearchType } from './ListMusicSearch'
 import MusicPositionModal, { type MusicPositionModalType } from './MusicPositionModal'
-import DownloadModal, {DownloadModalType} from "@/components/common/DownloadModal";
+import MetadataEditModal, { type MetadataEditType, type MetadataEditProps } from '@/components/MetadataEditModal'
+import MusicToggleModal, { type MusicToggleModalType } from './MusicToggleModal'
 
 
 export default () => {
@@ -26,11 +27,13 @@ export default () => {
   const listMusicAddRef = useRef<ListMusicAddType>(null)
   const listMusicMultiAddRef = useRef<ListAddMultiType>(null)
   const musicPositionModalRef = useRef<MusicPositionModalType>(null)
+  const metadataEditTypeRef = useRef<MetadataEditType>(null)
   const listMenuRef = useRef<ListMenuType>(null)
+  const musicToggleModalRef = useRef<MusicToggleModalType>(null)
   const layoutHeightRef = useRef<number>(0)
   const isShowMultipleModeBar = useRef(false)
   const isShowSearchBarModeBar = useRef(false)
-  const downloadModalRef = useRef<DownloadModalType>(null)
+  const selectedInfoRef = useRef<SelectInfo>()
   // console.log('render index list')
 
   const hancelMultiSelect = useCallback(() => {
@@ -86,7 +89,7 @@ export default () => {
   const handleScrollToInfo = useCallback((info: LX.Music.MusicInfo) => {
     listRef.current?.scrollToInfo(info)
     handleExitSearch()
-  }, [])
+  }, [handleExitSearch])
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     layoutHeightRef.current = e.nativeEvent.layout.height
   }, [])
@@ -104,6 +107,15 @@ export default () => {
     } else {
       listMusicAddRef.current?.show({ musicInfo: info.musicInfo, listId: info.listId, isMove: true })
     }
+  }, [])
+  const handleEditMetadata = useCallback((info: SelectInfo) => {
+    if (info.musicInfo.source != 'local') return
+    selectedInfoRef.current = info
+    metadataEditTypeRef.current?.show(info.musicInfo.meta.filePath)
+  }, [])
+  const handleUpdateMetadata = useCallback<MetadataEditProps['onUpdate']>((info) => {
+    if (!selectedInfoRef.current || selectedInfoRef.current.musicInfo.source != 'local') return
+    handleUpdateMusicInfo(selectedInfoRef.current.listId, selectedInfoRef.current.musicInfo, info)
   }, [])
 
 
@@ -135,8 +147,8 @@ export default () => {
           onScrollToInfo={handleScrollToInfo}
         />
       </View>
-      <ListMusicAdd ref={listMusicAddRef} onAdded={() => { hancelExitSelect() }} />
-      <ListMusicMultiAdd ref={listMusicMultiAddRef} onAdded={() => { hancelExitSelect() }} />
+      <ListMusicAdd ref={listMusicAddRef} onAdded={hancelExitSelect} />
+      <ListMusicMultiAdd ref={listMusicMultiAddRef} onAdded={hancelExitSelect} />
       <MusicPositionModal ref={musicPositionModalRef}
         onUpdatePosition={(info, postion) => { handleUpdateMusicPosition(postion, info.listId, info.musicInfo, info.selectedList, hancelExitSelect) }} />
       <ListMenu
@@ -146,14 +158,18 @@ export default () => {
         onRemove={info => { hancelExitSelect(); handleRemove(info.listId, info.musicInfo, info.selectedList, hancelExitSelect) }}
         onDislikeMusic={info => { void handleDislikeMusic(info.musicInfo) }}
         onCopyName={info => { handleShare(info.musicInfo) }}
+        onMusicSourceDetail={info => { void handleShowMusicSourceDetail(info.musicInfo) }}
         onAdd={handleAddMusic}
         onMove={handleMoveMusic}
+        onEditMetadata={handleEditMetadata}
         onChangePosition={info => musicPositionModalRef.current?.show(info)}
-        onDownload={(info)=>{
-          downloadModalRef.current?.show(info.musicInfo)
-        }}
+        onToggleSource={info => musicToggleModalRef.current?.show(info)}
       />
-      <DownloadModal ref={downloadModalRef}/>
+      <MetadataEditModal
+        ref={metadataEditTypeRef}
+        onUpdate={handleUpdateMetadata}
+      />
+      <MusicToggleModal ref={musicToggleModalRef} />
     </View>
   )
 }

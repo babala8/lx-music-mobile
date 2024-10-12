@@ -3,7 +3,6 @@ import { createAppEventHub } from '@/event/appEvent'
 import { createListEventHub } from '@/event/listEvent'
 import { createDislikeEventHub } from '@/event/dislikeEvent'
 import { createStateEventHub } from '@/event/stateEvent'
-import { createCachedEventHub } from '@/event/cachedEvent'
 if (process.versions == null) {
   // @ts-expect-error
   process.versions = {
@@ -54,6 +53,7 @@ global.lx = {
 
   qualityList: {},
   apis: {},
+  apiInitPromise: [Promise.resolve(false), true, () => {}],
 
   jumpMyListPosition: false,
 
@@ -77,4 +77,3 @@ global.app_event = createAppEventHub()
 global.list_event = createListEventHub()
 global.dislike_event = createDislikeEventHub()
 global.state_event = createStateEventHub()
-global.cache_event = createCachedEventHub()

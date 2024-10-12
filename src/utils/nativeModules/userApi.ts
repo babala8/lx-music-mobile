@@ -2,11 +2,16 @@ import { NativeEventEmitter, NativeModules } from 'react-native'
 
 const { UserApiModule } = NativeModules
 
+let loadScriptInfo: LX.UserApi.UserApiInfo | null = null
 export const loadScript = (info: LX.UserApi.UserApiInfo & { script: string }) => {
+  loadScriptInfo = info
   UserApiModule.loadScript({
     id: info.id,
     name: info.name,
     description: info.description,
+    version: info.version ?? '',
+    author: info.author ?? '',
+    homepage: info.homepage ?? '',
     script: info.script,
   })
 }
@@ -32,7 +37,6 @@ export const sendAction = <T extends keyof SendActions>(action: T, data: SendAct
 // export const clearAppCache = CacheModule.clearAppCache as () => Promise<void>
 
 export interface InitParams {
-  id: string
   status: boolean
   errorMessage: string
   info: LX.UserApi.UserApiInfo
@@ -72,11 +76,18 @@ export interface Actions {
 }
 export type ActionsEvent = { [K in keyof Actions]: { action: K, data: Actions[K] } }[keyof Actions]
 
-export const onScriptAction = (callback: (event: ActionsEvent) => void): () => void => {
+export const onScriptAction = (handler: (event: ActionsEvent) => void): () => void => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const eventEmitter = new NativeEventEmitter(UserApiModule)
   const eventListener = eventEmitter.addListener('api-action', event => {
-    if (event.data) event.data = JSON.parse(event.data)
-    callback(event)
+    if (event.data) event.data = JSON.parse(event.data as string)
+    if (event.action == 'init') {
+      if (event.data.info) event.data.info = { ...loadScriptInfo, ...event.data.info }
+      else event.data.info = { ...loadScriptInfo }
+    } else if (event.action == 'showUpdateAlert') {
+      if (!loadScriptInfo?.allowShowUpdateAlert) return
+    }
+    handler(event as ActionsEvent)
   })
 
   return () => {

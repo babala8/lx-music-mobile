@@ -22,6 +22,7 @@ declare namespace LX {
       songId: string | number // 歌曲ID，mg源为copyrightId，local为文件路径
       albumName: string // 歌曲专辑名称
       picUrl?: string | null // 歌曲图片链接
+      toggleMusicInfo?: MusicInfoOnline | null
     }
 
     interface MusicInfoMeta_online extends MusicInfoMetaBase {
@@ -31,9 +32,8 @@ declare namespace LX {
     }
 
     interface MusicInfoMeta_local extends MusicInfoMetaBase {
-      fileName: string
-      ext: string
       filePath: string
+      ext: string
     }
 
 
@@ -101,14 +101,6 @@ declare namespace LX {
       lyrics: LyricInfo
     }
 
-    interface MusicFileMeta {
-      title: string
-      artist: string | null
-      album: string | null
-      APIC: string | null
-      lyrics: string | null
-    }
-
     interface MusicUrlInfo {
       id: string
       url: string
@@ -118,5 +110,6 @@ declare namespace LX {
       id: string
       list: MusicInfoOnline[]
     }
+
   }
 }

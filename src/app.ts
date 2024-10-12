@@ -7,13 +7,11 @@ import { exitApp } from './utils/nativeModules/utils'
 import { windowSizeTools } from './utils/windowSizeTools'
 import { listenLaunchEvent } from './navigation/regLaunchedEvent'
 import { tipDialog } from './utils/tools'
-import {DeviceEventEmitter} from "react-native";
-import {requestStoragePermission} from "@/core/music/utils";
 
 console.log('starting app...')
 listenLaunchEvent()
 
-const startPromise = Promise.all([getFontSize(), windowSizeTools.init()]).then(async([fontSize]) => {
+void Promise.all([getFontSize(), windowSizeTools.init()]).then(async([fontSize]) => {
   global.lx.fontSize = fontSize
   bootLog('Font size setting loaded.')
 
@@ -54,7 +52,7 @@ const startPromise = Promise.all([getFontSize(), windowSizeTools.init()]).then(a
     if (!isInited) return
     // import('@/utils/nativeModules/cryptoTest')
 
-    await navigations.pushHomeScreen().then(async () => {
+    await navigations.pushHomeScreen().then(() => {
       void handlePushedHomeScreen()
     }).catch((err: any) => {
       void tipDialog({
@@ -77,15 +75,3 @@ const startPromise = Promise.all([getFontSize(), windowSizeTools.init()]).then(a
     exitApp()
   })
 })
-
-const eventListener = DeviceEventEmitter.addListener('onPathReceived', eventParams => {
-  Promise.all([
-    startPromise,
-    requestStoragePermission()
-  ]).then(()=>{
-    console.log('onPathReceived',eventParams);
-    if(eventParams.path){
-      global.cache_event.launchFilePathUpdated(eventParams.path)
-    }
-  })
-});

@@ -1,4 +1,3 @@
-import {PermissionsAndroid, Platform} from 'react-native';
 import musicSdk, { findMusic } from '@/utils/musicSdk'
 import {
   getOtherSource as getOtherSourceFromStore,
@@ -7,90 +6,11 @@ import {
   getPlayerLyric as getStoreLyric,
 } from '@/utils/data'
 import { langS2T, toNewMusicInfo, toOldMusicInfo } from '@/utils'
-import {assertApiSupport, toast} from '@/utils/tools'
+import { assertApiSupport } from '@/utils/tools'
 import settingState from '@/store/setting/state'
 import { requestMsg } from '@/utils/message'
 import BackgroundTimer from 'react-native-background-timer'
-import RNFetchBlob from 'rn-fetch-blob';
-import {getLyricInfo} from "@/core/music/index";
-import {writeMetaData} from "@/utils/nativeModules/metadata";
-
-export async function requestStoragePermission() {
-  const granted = await PermissionsAndroid.request(
-    PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-    {
-      title: '存储读写权限申请',
-        message:
-          '洛雪音乐助手需要使用存储读写权限才能读取音乐.',
-        // buttonNeutral: '一会再问我',
-        // buttonNegative: '取消',
-        buttonPositive: '确定',
-    },
-  );
-
-  if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-    return Promise.resolve();
-  }
-  return Promise.reject();
-}
-
-export function getFileExtension(url:string) {
-  // 使用正则表达式匹配URL中的文件扩展名
-  const match = url.match(/\.([0-9a-z]+)(?=[?#]|$)/i);
-
-  // 如果匹配到扩展名，则返回该扩展名，否则返回默认值'mp3'
-  return match ? match[1] : 'mp3';
-}
-
-const downloadMusicWithLrc = async ({url, fileName, musicInfo, picUrl, quality}: {url: string, fileName: string, musicInfo: LX.Music.MusicInfoOnline, picUrl?:string, quality?: LX.Quality} ,options: DownloadOptions) => {
-  const dirs = RNFetchBlob.fs.dirs;
-  const extension = getFileExtension(url);
-  let path = `${dirs.DownloadDir}/lx.music/${fileName}.${extension}`;
-  let lrcPath = `${dirs.DownloadDir}/lx.music/${fileName}.lrc`
-  return requestStoragePermission().then(async ()=>{
-    const exists = await RNFetchBlob.fs.exists(path);
-    if(exists && options.isSkipFile){
-      return Promise.reject('下载目录存在相同文件已跳过')
-    }
-    if(exists && !options.isSkipFile){
-      const now = Date.now()
-      path = `${dirs.DownloadDir}/lx.music/${fileName}_${now}.${extension}`;
-      lrcPath = `${dirs.DownloadDir}/lx.music/${fileName}_${now}.lrc`
-    }
-    const task: Promise<any>[] = [
-      RNFetchBlob.config({
-        fileCache: true,
-        addAndroidDownloads: {
-          useDownloadManager: true,
-          notification: true,
-          path: path,
-          description: 'Downloading file.',
-        },
-      }).fetch('GET', url)
-    ]
-    if(options.isDownloadLrc) task.push(
-      getLyricInfo({musicInfo, onToggleSource: ()=>{}}).then(async ({lyric})=>{
-        return RNFetchBlob.fs.writeFile(
-          lrcPath,
-          lyric,
-          'utf8'
-        )
-      })
-    )
-    return Promise.allSettled(task).then(()=>{
-      console.log('123');
-      return writeMetaData(path,{
-        singer: musicInfo.singer,
-        name: musicInfo.name,
-        picUrl: (typeof picUrl === "string" && picUrl.startsWith('http') ? picUrl : undefined),
-        quality
-      })
-    })
-
-  }).catch((e)=>{
-    return Promise.reject(e ?? "权限获取失败")
-  })
-};
+import { apis } from '@/utils/musicSdk/api-source'
 
 
 const getOtherSourcePromises = new Map()
@@ -134,7 +54,7 @@ export const getOtherSource = async(musicInfo: LX.Music.MusicInfo | LX.Download.
     let timeout: null | number = BackgroundTimer.setTimeout(() => {
       timeout = null
       reject(new Error('find music timeout'))
-    }, 20_000)
+    }, 15_000)
     findMusic(searchMusicInfo).then((otherSource) => {
       resolve(otherSource.map(toNewMusicInfo) as LX.Music.MusicInfoOnline[])
     }).catch(reject).finally(() => {
@@ -226,10 +146,81 @@ export const getCachedLyricInfo = async(musicInfo: LX.Music.MusicInfo): Promise<
   return null
 }
 
-export const getPlayQuality = (highQuality: boolean, musicInfo: LX.Music.MusicInfoOnline): LX.Quality => {
+export const getOnlineOtherSourceMusicUrlByLocal = async(musicInfo: LX.Music.MusicInfoLocal, isRefresh: boolean): Promise<{
+  url: string
+  quality: LX.Quality
+  isFromCache: boolean
+}> => {
+  if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
+
+  const quality = '128k'
+
+  const cachedUrl = await getStoreMusicUrl(musicInfo, quality)
+  if (cachedUrl && !isRefresh) return { url: cachedUrl, quality, isFromCache: true }
+
+  let reqPromise
+  try {
+    reqPromise = apis('local').getMusicUrl(toOldMusicInfo(musicInfo), null).promise
+  } catch (err: any) {
+    reqPromise = Promise.reject(err)
+  }
+
+  return reqPromise.then(({ url }: { url: string }) => {
+    return { url, quality, isFromCache: false }
+  })
+}
+
+export const getOnlineOtherSourceLyricByLocal = async(musicInfo: LX.Music.MusicInfoLocal, isRefresh: boolean): Promise<{
+  lyricInfo: LX.Music.LyricInfo
+  isFromCache: boolean
+}> => {
+  if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
+
+  const lyricInfo = await getCachedLyricInfo(musicInfo)
+  if (lyricInfo && !isRefresh) return { lyricInfo, isFromCache: true }
+
+  let reqPromise
+  try {
+    reqPromise = apis('local').getLyric(toOldMusicInfo(musicInfo)).promise
+  } catch (err: any) {
+    reqPromise = Promise.reject(err)
+  }
+
+  return reqPromise.then((lyricInfo: LX.Music.LyricInfo) => {
+    return { lyricInfo, isFromCache: false }
+  })
+}
+
+export const getOnlineOtherSourcePicByLocal = async(musicInfo: LX.Music.MusicInfoLocal): Promise<{
+  url: string
+}> => {
+  if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
+
+  let reqPromise
+  try {
+    reqPromise = apis('local').getPic(toOldMusicInfo(musicInfo)).promise
+  } catch (err: any) {
+    reqPromise = Promise.reject(err)
+  }
+
+  return reqPromise.then((url: string) => {
+    return { url }
+  })
+}
+
+export const TRY_QUALITYS_LIST = ['flac24bit', 'flac', '320k'] as const
+type TryQualityType = typeof TRY_QUALITYS_LIST[number]
+export const getPlayQuality = (highQuality: LX.Quality, musicInfo: LX.Music.MusicInfoOnline): LX.Quality => {
   let type: LX.Quality = '128k'
-  let list = global.lx.qualityList[musicInfo.source]
-  if (highQuality && musicInfo.meta._qualitys['320k'] && list && list.includes('320k')) type = '320k'
+  if (TRY_QUALITYS_LIST.includes(highQuality as TryQualityType)) {
+    let list = global.lx.qualityList[musicInfo.source]
+
+    let t = TRY_QUALITYS_LIST
+      .slice(TRY_QUALITYS_LIST.indexOf(highQuality as TryQualityType))
+      .find(q => musicInfo.meta._qualitys[q] && list?.includes(q))
+
+    if (t) type = t
+  }
   return type
 }
 
@@ -245,14 +236,16 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
   quality: LX.Quality
   isFromCache: boolean
 }> => {
+  if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
+
   let musicInfo: LX.Music.MusicInfoOnline | null = null
   let itemQuality: LX.Quality | null = null
   // eslint-disable-next-line no-cond-assign
-  while (musicInfo = (musicInfos.shift() as LX.Music.MusicInfoOnline)) {
+  while (musicInfo = (musicInfos.shift()!)) {
     if (retryedSource.includes(musicInfo.source)) continue
     retryedSource.push(musicInfo.source)
     if (!assertApiSupport(musicInfo.source)) continue
-    itemQuality = quality ?? getPlayQuality(settingState.setting['player.isPlayHighQuality'], musicInfo)
+    itemQuality = quality ?? getPlayQuality(settingState.setting['player.playQuality'], musicInfo)
     if (!musicInfo.meta._qualitys[itemQuality]) continue
 
     console.log('try toggle to: ', musicInfo.source, musicInfo.name, musicInfo.singer, musicInfo.interval)
@@ -270,7 +263,7 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
   } catch (err: any) {
     reqPromise = Promise.reject(err)
   }
-  retryedSource.includes(musicInfo.source)
+  // retryedSource.includes(musicInfo.source)
   // eslint-disable-next-line @typescript-eslint/promise-function-async
   return reqPromise.then(({ url, type }: { url: string, type: LX.Quality }) => {
     return { musicInfo, url, quality: type, isFromCache: false }
@@ -297,8 +290,9 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
   quality: LX.Quality
   isFromCache: boolean
 }> => {
+  if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
   // console.log(musicInfo.source)
-  const targetQuality = quality ?? getPlayQuality(settingState.setting['player.isPlayHighQuality'], musicInfo)
+  const targetQuality = quality ?? getPlayQuality(settingState.setting['player.playQuality'], musicInfo)
 
   let reqPromise
   try {
@@ -329,45 +323,7 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
   })
 }
 
-interface DownloadOptions {
-  isDownloadLrc: boolean,
-  isEnableDownload: boolean,
-  isSkipFile: boolean
-}
 
-
-export const downloadMusic = (musicInfo: LX.Music.MusicInfoOnline, options: DownloadOptions, quality?: LX.Quality)=>{
-  toast('开始下载...')
-  Promise.all([
-    handleGetOnlineMusicUrl({
-      musicInfo: musicInfo,
-      isRefresh:false,
-      allowToggleSource: true,
-      quality,
-      onToggleSource:()=>{},
-    }),
-    handleGetOnlinePicUrl({
-      musicInfo: musicInfo,
-      isRefresh:false,
-      allowToggleSource: true,
-      onToggleSource:()=>{},
-    })
-  ]).then(([urlRes, picRes])=>{
-    return downloadMusicWithLrc({
-      url: urlRes.url,
-      fileName: `${urlRes.musicInfo.name}-${urlRes.musicInfo.singer}-${quality}`,
-      picUrl: picRes.url,
-      quality,
-      musicInfo
-    }, options)
-  }).then(()=>{
-    console.log('download success');
-    toast('下载成功')
-  }).catch((msg)=>{
-    toast(msg || '获取下载地址失败')
-  })
-
-}
 export const getOnlineOtherSourcePicUrl = async({ musicInfos, onToggleSource, isRefresh, retryedSource = [] }: {
   musicInfos: LX.Music.MusicInfoOnline[]
   onToggleSource: (musicInfo?: LX.Music.MusicInfoOnline) => void
@@ -380,7 +336,7 @@ export const getOnlineOtherSourcePicUrl = async({ musicInfos, onToggleSource, is
 }> => {
   let musicInfo: LX.Music.MusicInfoOnline | null = null
   // eslint-disable-next-line no-cond-assign
-  while (musicInfo = (musicInfos.shift() as LX.Music.MusicInfoOnline)) {
+  while (musicInfo = (musicInfos.shift()!)) {
     if (retryedSource.includes(musicInfo.source)) continue
     retryedSource.push(musicInfo.source)
     // if (!assertApiSupport(musicInfo.source)) continue
@@ -398,7 +354,7 @@ export const getOnlineOtherSourcePicUrl = async({ musicInfos, onToggleSource, is
   } catch (err: any) {
     reqPromise = Promise.reject(err)
   }
-  retryedSource.includes(musicInfo.source)
+  // retryedSource.includes(musicInfo.source)
   return reqPromise.then((url: string) => {
     return { musicInfo, url, isFromCache: false }
     // eslint-disable-next-line @typescript-eslint/promise-function-async
@@ -463,7 +419,7 @@ export const getOnlineOtherSourceLyricInfo = async({ musicInfos, onToggleSource,
 }> => {
   let musicInfo: LX.Music.MusicInfoOnline | null = null
   // eslint-disable-next-line no-cond-assign
-  while (musicInfo = (musicInfos.shift() as LX.Music.MusicInfoOnline)) {
+  while (musicInfo = (musicInfos.shift()!)) {
     if (retryedSource.includes(musicInfo.source)) continue
     retryedSource.push(musicInfo.source)
     // if (!assertApiSupport(musicInfo.source)) continue
@@ -485,7 +441,7 @@ export const getOnlineOtherSourceLyricInfo = async({ musicInfos, onToggleSource,
   } catch (err: any) {
     reqPromise = Promise.reject(err)
   }
-  retryedSource.includes(musicInfo.source)
+  // retryedSource.includes(musicInfo.source)
   return reqPromise.then(async(lyricInfo: LX.Music.LyricInfo) => {
     return existTimeExp.test(lyricInfo.lyric) ? {
       lyricInfo,

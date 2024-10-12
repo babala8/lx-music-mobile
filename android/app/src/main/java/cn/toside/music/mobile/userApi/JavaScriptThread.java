@@ -37,15 +37,14 @@ public class JavaScriptThread extends HandlerThread {
             mainHandler.sendEmptyMessage(HandlerWhat.INIT_SUCCESS);
           } else {
             Log.w("UserApi [thread]", "script load failed: " + result);
-            Handler handler = mainHandler;
-            handler.sendMessage(handler.obtainMessage(HandlerWhat.INIT_FAILED, result));
+            mainHandler.sendMessage(mainHandler.obtainMessage(HandlerWhat.INIT_FAILED, result));
           }
         }
         switch (message.what) {
           case HandlerWhat.INIT: break;
           case HandlerWhat.ACTION: {
             Object[] data = (Object[]) message.obj;
-            Log.d("UserApi [handler]", "handler action: " + data[0]);
+            // Log.d("UserApi [handler]", "handler action: " + data[0]);
             javaScriptExecutor.callJS((String) data[0], data[1]);
             return;
           }

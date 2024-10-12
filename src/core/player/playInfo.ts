@@ -10,6 +10,10 @@ export const setMusicInfo = (musicInfo: Partial<LX.Player.MusicInfo>) => {
   playerActions.setMusicInfo(musicInfo)
 }
 
+export const setLoadErrorPicUrl = (url: string) => {
+  playerActions.setLoadErrorPicUrl(url)
+}
+
 export const setPlayListId = (listId: string | null) => {
   playerActions.setPlayListId(listId)
 }
@@ -31,17 +35,29 @@ export const getPlayIndex = (listId: string | null, musicInfo: LX.Download.ListI
   playIndex: number
   playerPlayIndex: number
 } => {
-  const { playInfo } = playerState;
-  const playerList = getListMusicSync(playInfo.playerListId);
-  let playerPlayIndex = playerList.length ? Math.min(playInfo.playerPlayIndex, playerList.length - 1) : -1;
+  const { playInfo } = playerState
+  const playerList = getListMusicSync(playInfo.playerListId)
 
-  const list = getListMusicSync(listId);
-  const playIndex = list.findIndex(m => m.id == musicInfo?.id);
+  // if (listIndex < 0) throw new Error('music info not found')
+  // playInfo.playIndex = listIndex
 
-  if (!isTempPlay && playIndex < 0) {
-    playerPlayIndex = playerPlayIndex < 1 ? (list.length - 1) : (playerPlayIndex - 1);
-  } else {
-    playerPlayIndex = playIndex;
+  let playIndex = -1
+  let playerPlayIndex = -1
+  if (playerList.length) {
+    playerPlayIndex = Math.min(playInfo.playerPlayIndex, playerList.length - 1)
+  }
+
+  const list = getListMusicSync(listId)
+  if (list.length && musicInfo) {
+    const currentId = musicInfo.id
+    playIndex = list.findIndex(m => m.id == currentId)
+    if (!isTempPlay) {
+      if (playIndex < 0) {
+        playerPlayIndex = playerPlayIndex < 1 ? (list.length - 1) : (playerPlayIndex - 1)
+      } else {
+        playerPlayIndex = playIndex
+      }
+    }
   }
 
   return {
@@ -100,7 +116,6 @@ const setPlayerMusicInfo = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
  * @param isTempPlay 是否临时播放
  */
 export const setPlayMusicInfo = (listId: string | null, musicInfo: LX.Download.ListItem | LX.Music.MusicInfo | null, isTempPlay: boolean = false) => {
-
   playerActions.setPlayMusicInfo(listId, musicInfo, isTempPlay)
   setPlayerMusicInfo(musicInfo)
 
@@ -111,6 +126,7 @@ export const setPlayMusicInfo = (listId: string | null, musicInfo: LX.Download.L
     setPlayListId(null)
   } else {
     const { playIndex, playerPlayIndex } = getPlayIndex(listId, musicInfo, isTempPlay)
+
     playerActions.updatePlayIndex(playIndex, playerPlayIndex)
     global.app_event.musicToggled()
   }
@@ -118,5 +134,5 @@ export const setPlayMusicInfo = (listId: string | null, musicInfo: LX.Download.L
 
 export const getList = (listId: string | null): LX.Music.MusicInfo[] | LX.Download.ListItem[] => {
   // return listId == LIST_ID_DOWNLOAD ? downloadList : getListMusicSync(listId)
-  return getListMusicSync(listId)
+  return listId == LIST_IDS.DOWNLOAD ? [] : getListMusicSync(listId)
 }

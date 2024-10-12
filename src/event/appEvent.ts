@@ -181,9 +181,6 @@ export class AppEvent extends Event {
       }, 200)
     }
   }
-  jumpDownloadListPosition(){
-    this.emit('jumpDownloadListPosition')
-  }
 
   changeLoveListVisible(visible: boolean) {
     this.emit('changeLoveListVisible', visible)

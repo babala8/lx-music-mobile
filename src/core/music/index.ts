@@ -24,19 +24,20 @@ export const getMusicUrl = async({
   quality,
   isRefresh = false,
   onToggleSource,
+  allowToggleSource,
 }: {
   musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
   isRefresh?: boolean
   quality?: LX.Quality
   onToggleSource?: (musicInfo?: LX.Music.MusicInfoOnline) => void
+  allowToggleSource?: boolean
 }): Promise<string> => {
   if ('progress' in musicInfo) {
-    return getDownloadMusicUrl({ musicInfo, isRefresh, onToggleSource })
+    return getDownloadMusicUrl({ musicInfo, isRefresh, onToggleSource, allowToggleSource })
   } else if (musicInfo.source == 'local') {
-    return musicInfo.meta.filePath
-    // return getLocalMusicUrl({ musicInfo, isRefresh, onToggleSource })
+    return getLocalMusicUrl({ musicInfo, isRefresh, onToggleSource, allowToggleSource })
   } else {
-    return getOnlineMusicUrl({ musicInfo, isRefresh, quality, onToggleSource })
+    return getOnlineMusicUrl({ musicInfo, isRefresh, quality, onToggleSource, allowToggleSource })
   }
 }
 
@@ -54,8 +55,7 @@ export const getPicPath = async({
   if ('progress' in musicInfo) {
     return getDownloadPicUrl({ musicInfo, isRefresh, listId, onToggleSource })
   } else if (musicInfo.source == 'local') {
-    return ''
-    // return getLocalPicUrl({ musicInfo, isRefresh, listId, onToggleSource })
+    return getLocalPicUrl({ musicInfo, isRefresh, listId, onToggleSource })
   } else {
     return getOnlinePicUrl({ musicInfo, isRefresh, listId, onToggleSource })
   }
@@ -73,7 +73,6 @@ export const getLyricInfo = async({
   if ('progress' in musicInfo) {
     return getDownloadLyricInfo({ musicInfo, isRefresh, onToggleSource })
   } else if (musicInfo.source == 'local') {
-    // TODO
     return getLocalLyricInfo({ musicInfo, isRefresh, onToggleSource })
   } else {
     return getOnlineLyricInfo({ musicInfo, isRefresh, onToggleSource })
